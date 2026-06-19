@@ -1,0 +1,149 @@
+Metadata-Version: 2.4
+Name: jira-helper
+Version: 0.1.0
+Summary: Terminal CLI and importable library for admin work over Atlassian Cloud (Jira now, Confluence later).
+License-Expression: MIT
+Keywords: jira,atlassian,confluence,cli
+Classifier: Private :: Do Not Upload
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: typer>=0.12
+Requires-Dist: httpx>=0.27
+Requires-Dist: PyYAML>=6.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: ruff>=0.6; extra == "dev"
+
+# jira-helper
+
+A terminal **CLI** and importable **Python library** for admin work over
+**Atlassian Cloud** (Jira today, Confluence later): resolve people ↔ Atlassian
+account-ids, manage virtual teams, and query/cache tickets (including
+parent-relationship trees) for fast browsing, statistics, and reports.
+
+> **Status: early scaffold.** The full command surface is wired and
+> self-describing (`--help`, `spec`), but most commands are stubs that report
+> *not implemented* while the features land. Expect the shape below to stay
+> stable and the behavior to fill in.
+
+## Design
+
+- **Library-first, 1:1 mapping.** Every command is a thin wrapper over a
+  function: `noun` = module, `verb` = function. `jira-helper issue roots …` →
+  `jira_helper.issue.roots(…)`. The CLI only parses args and renders; `--json`
+  is a renderer flag, never a behavior change.
+- **Resource-first nouns** modeled on `gh`/`kubectl`:
+  `jira-helper [GLOBAL FLAGS] <noun> <verb> [args] [flags]`.
+- **`--json` everywhere** for scripting, plus a machine-readable `spec` command
+  that emits the entire command tree (every command, arg, flag, type, default)
+  as JSON — built to be driven by an LLM/MCP wrapper.
+
+## Command surface
+
+```
+jira-helper init | doctor | version          # onboarding, health, version
+jira-helper spec [--json]                     # full command tree (LLM/MCP ingest)
+
+jira-helper config  init|show|get|set|edit|verify|path
+jira-helper account list|get|add|remove|search|path     # name ↔ account-id
+jira-helper issue   list|roots|tree|get                 # ticket queries
+jira-helper team    list|show|create|delete|rename|add-member|remove-member|path
+jira-helper rule    list|edit|add|remove|test|validate|path   # virtual-parent rules
+jira-helper cache   status|get|export|clear|path        # local SQLite cache
+jira-helper sync    run|status|install                  # background refresh
+```
+
+Global flags are defined once and precede the noun, e.g.
+`jira-helper --json issue list --assignee alice --roots`.
+
+Run `jira-helper --help` (or `<noun> --help`) for the full, documented grammar.
+
+## Use as a library
+
+```python
+import jira_helper
+
+jira_helper.issue.roots(assignee=["alice"])
+jira_helper.team.add_member("backend", ["alice", "bob"])
+```
+
+## Requirements
+
+- Python 3.11+
+- A Jira Cloud site (`https://your-domain.atlassian.net`)
+- A Jira API token — create one at
+  <https://id.atlassian.com/manage-profile/security/api-tokens>
+
+## Installation
+
+### Install / update (recommended)
+
+[`uv`](https://docs.astral.sh/uv/) installs the tool from a public distribution
+index over plain, anonymous HTTPS — no GitHub login or token required (handy on
+locked-down networks where authenticated access is blocked). First install `uv`:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Then install — and later upgrade — `jira-helper`:
+
+```bash
+# install
+uv tool install jira-helper --index https://xohzzwn6kcj9.github.io/gh-dist/simple/
+
+# upgrade to the latest release
+uv tool install --force jira-helper --index https://xohzzwn6kcj9.github.io/gh-dist/simple/
+```
+
+For one-word upgrades, add an alias to `~/.zshrc`:
+
+```bash
+alias jh-up='uv tool install --force jira-helper --index https://xohzzwn6kcj9.github.io/gh-dist/simple/'
+```
+
+`--index` keeps PyPI as the default, so runtime dependencies (typer, httpx,
+PyYAML) resolve from PyPI while `jira-helper` itself comes from the distribution
+index. This assumes PyPI is reachable over HTTPS.
+
+### From a clone (development)
+
+```bash
+pip install -e .
+```
+
+Either way you get the `jira-helper` console entry point.
+
+## Configuration
+
+Authentication uses Jira Cloud **basic auth** with your account email + an API
+token (the token is **not** your password). Provide credentials via environment
+variables (copy `.env.example` to `.env`):
+
+| Variable         | Description                              |
+| ---------------- | ---------------------------------------- |
+| `JIRA_BASE_URL`  | e.g. `https://your-domain.atlassian.net` |
+| `JIRA_EMAIL`     | The Atlassian account email              |
+| `JIRA_API_TOKEN` | API token (NOT your password)            |
+
+> Never commit credentials. `.env` is git-ignored.
+
+## Development
+
+```bash
+pip install -e '.[dev]'
+ruff check .
+ruff format .
+pytest
+```
+
+## Releasing (maintainer)
+
+The version is derived from git tags by `setuptools-scm`, so a tag push **is** the
+release: GitHub Actions builds the wheel and publishes it to the distribution
+index over GitHub Pages.
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
