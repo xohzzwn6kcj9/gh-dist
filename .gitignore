@@ -1,0 +1,7 @@
+# Machine-local Claude Code state — never commit (this repo is public).
+# Tracked, intentional content under .claude/ (e.g. skills/) is added explicitly.
+/.claude/settings.local.json
+/.claude/scheduled_tasks.lock
+
+# Git worktrees (feature-branch isolation)
+.worktree/
