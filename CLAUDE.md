@@ -66,6 +66,7 @@ Files in that directory:
 | `rules.yaml`          | virtual-parent rules (git-ignored in source)              |
 | `cache.db` (+ `-wal`/`-shm`) | local SQLite ticket cache                          |
 | `sync.lock`           | `flock` file guarding single-instance `sync`              |
+| `logs/jira-helper.log` (+ `.1`…`.3`) | rotating CLI log (v0.7.0+, `chmod 600`, credentials redacted) |
 
 Env vars **override** the config file at read time (handy for CI / a throwaway
 shell): `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`.
@@ -75,16 +76,50 @@ Find the live paths without guessing: `jira-helper config path` and
 
 ## Where logs and errors go ← read this first for any error
 
-**There is no log file and no logging framework.** `jira-helper` does not write
-to `~/.local/state`, syslog, or any rotating log. All diagnostics go to
-**stderr**; **stdout is reserved for machine data**, so you can always separate
-them with `2>`:
+**`jira-helper` writes every run to a rotating log file** (since **v0.7.0**) — this
+is the first thing to read for any failure. It lives in a `logs/` subdir of the
+config dir (alongside `config.yaml`), by default:
 
-```bash
-jira-helper issue list --assignee alice >out.json 2>err.txt
+```
+~/.config/jira-helper/logs/jira-helper.log     # + .log.1 … .log.3, rotated (~2 MB each)
 ```
 
-There are exactly **three** places an error shows up:
+Path resolution follows the config dir (`--config <path>`'s dir → `$JIRA_HELPER_CONFIG`'s
+dir → `$XDG_CONFIG_HOME/jira-helper/` else `~/.config/jira-helper/`, with `logs/`
+appended). Override the dir with `$JIRA_HELPER_LOG_DIR` or a `log_dir` config key;
+disable file logging entirely with `$JIRA_HELPER_NO_LOG=1`. **Find it without guessing:
+`jira-helper logs path`.**
+
+**What it contains + redaction.** The log captures the command line, HTTP request
+traces, expected errors, and **uncaught tracebacks** (so a crash always leaves a
+record). **Credentials are redacted at write time** — the API token and the
+`Authorization` header are replaced with `****` and never reach the file. But the log
+*does* keep the Jira domain, your email, account-ids, and JQL (they make it useful for
+debugging), so it is **not automatically safe to paste publicly** — review/scrub before
+sharing (see "How to report a bug" below).
+
+**How to read it — two ways:**
+
+```bash
+# Via the CLI (preferred; v0.7.0+):
+jira-helper logs path                 # where the file is
+jira-helper logs status               # size, line count, time span, rotation backups
+jira-helper logs show --lines 100     # tail the log
+jira-helper logs show --level ERROR   # only errors (credentials already redacted)
+
+# Plain shell fallback (works even if the CLI itself is too broken to run):
+tail -n 100 "$(jira-helper logs path)"
+grep -i error "$(jira-helper logs path)"
+tail -f "$(jira-helper logs path)"    # follow live while reproducing
+```
+
+`-v/--verbose` additionally **streams the log to stderr** for live debugging, and
+`-q/--quiet` keeps it quiet (functional since **v0.7.0**). On a **pre-0.7.0** install
+there is no log file and `-v/-q` are inert — fall back to capturing stderr (below).
+
+`jira-helper` keeps **stdout for machine data** and sends all diagnostics to
+**stderr**, so you can always split them: `jira-helper issue list … >out.json 2>err.txt`.
+Beyond the persisted log, errors surface in three familiar places:
 
 ### 1. Expected, "clean" errors → stderr, no traceback
 
@@ -111,6 +146,8 @@ single line to stderr and set an exit code — **no traceback**.
 If you see a **full traceback**, that is an **unhandled bug** in `jira-helper`
 (an expected error would have been the clean one-liner above). A traceback is the
 strongest signal that something is worth reporting upstream — capture it verbatim.
+Since v0.7.0 the same traceback is **also written (redacted) to the log file**, so
+`jira-helper logs show --level ERROR` recovers it even if you lost the terminal output.
 
 ### 3. The one *persisted* error: `sync`'s `last_error`
 
@@ -122,18 +159,19 @@ jira-helper --json sync status
 # → {"last_sync_at": ..., "watermark": ..., "locked": false, "last_error": "..."}
 ```
 
-> Note: `-v/--verbose` and `-q/--quiet` are accepted as global flags but are
-> **currently inert** (parsed, not yet wired to change verbosity). Don't rely on
-> `-v` for more log output; use the structured diagnostics below instead.
+This predates the log file and is still the easiest one-shot for *sync* health; for
+everything else the rotating log above is the fuller record.
 
 ## Diagnostic commands (cheap — prefer these over exploration)
 
 Run these first; they're fast, read-only, and secret-safe.
 
 ```bash
-jira-helper version            # installed version (e.g. 0.5.0) — always include in a report
+jira-helper version            # installed version (e.g. 0.7.0) — always include in a report
 jira-helper doctor             # read-only health check (see below)
 jira-helper --json doctor      # same, structured — safe to paste into a report
+jira-helper logs show --level ERROR   # recent errors from the log file (v0.7.0+; redacted)
+jira-helper logs status        # log file size / line count / time span (v0.7.0+)
 jira-helper --json sync status # last sync error / watermark / lock state
 jira-helper config show        # config with the token MASKED (never use --reveal in a report)
 jira-helper config verify      # live credential check
@@ -157,6 +195,8 @@ is to **assemble a complete, secret-free report** the maintainer can act on.
 - The **exact command** that failed (including global flags) + expected vs. actual.
 - The **stderr**: the `{"error","message"}` line, or the **full traceback** for a bug.
 - `jira-helper --json doctor`
+- The recent log (v0.7.0+): `jira-helper logs show --level ERROR` (and `logs status`);
+  credentials are auto-redacted, but still scrub per step 2.
 - For a `sync` problem: `jira-helper --json sync status`
 - OS + `python3 --version`; install method (`uv tool install … --index …`).
 - Minimal reproduction steps; the `--json` variant of the command if relevant.
@@ -169,6 +209,9 @@ contents:
   which prints the raw token into the report.
 - The stderr you paste can leak too: a `jira_api_error` message or a traceback
   may carry the email, the `*.atlassian.net` domain, account-ids, or ticket text.
+- The **log file** auto-redacts the API token + `Authorization` header, but still
+  contains the Jira domain / email / account-ids / JQL — review `logs show` output
+  the same way before attaching it.
 - Before sharing, grep the whole bundle for `api_token`, `JIRA_API_TOKEN`, your
   `@`-email, the `*.atlassian.net` host, and any account-ids; replace each with
   `REDACTED`.
