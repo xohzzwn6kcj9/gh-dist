@@ -33,8 +33,9 @@ simple/jira-helper/*.whl.metadata          # per-wheel METADATA
 
 ## `jira-helper` in one paragraph
 
-A Python ≥3.11 **CLI + importable library** for Atlassian Cloud / Jira admin
-work (resolve people ↔ account-ids, model an org tree, query/cache tickets).
+A Python ≥3.11 **CLI + importable library** for Atlassian Cloud admin work —
+Jira (resolve people ↔ account-ids, model an org tree, query/cache tickets) plus
+Confluence page search (`page`, since v0.8.0).
 Installed from this index over anonymous HTTPS — no GitHub login/token, which is
 why it works on locked-down corporate networks:
 
@@ -167,7 +168,7 @@ everything else the rotating log above is the fuller record.
 Run these first; they're fast, read-only, and secret-safe.
 
 ```bash
-jira-helper version            # installed version (e.g. 0.7.0) — always include in a report
+jira-helper version            # installed version (e.g. 0.8.0) — always include in a report
 jira-helper doctor             # read-only health check (see below)
 jira-helper --json doctor      # same, structured — safe to paste into a report
 jira-helper logs show --level ERROR   # recent errors from the log file (v0.7.0+; redacted)
