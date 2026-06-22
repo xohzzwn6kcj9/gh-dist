@@ -168,7 +168,7 @@ everything else the rotating log above is the fuller record.
 Run these first; they're fast, read-only, and secret-safe.
 
 ```bash
-jira-helper version            # installed version (e.g. 0.8.0) — always include in a report
+jira-helper version            # installed version (e.g. 0.9.0) — always include in a report
 jira-helper doctor             # read-only health check (see below)
 jira-helper --json doctor      # same, structured — safe to paste into a report
 jira-helper logs show --level ERROR   # recent errors from the log file (v0.7.0+; redacted)
