@@ -242,6 +242,13 @@ assemble the bundle above first — the report is what makes the bug fixable.
   and code/identifiers/paths stay English.
 - **Don't touch `simple/`** by hand — it's CI-generated; a manual edit will be
   clobbered on the next release and can corrupt the index hashes.
+- **`docs/command-reference.md` is also CI-generated** (`jira-helper spec --markdown`,
+  from the just-built wheel) — never hand-edit it; a release overwrites it. To change
+  it, change the tool's docstrings upstream and cut a release. `docs/README.md` is the
+  hand-maintained folder index (safe to edit).
+- **Keep the Pages source at `/` (root).** Pages serves `simple/` (the install index)
+  and `docs/` from the repo root; flipping the Pages source to `/docs` would change what
+  `uv tool install --index …/simple/` resolves and break installs.
 - Releases are tag-driven (`setuptools-scm` in the source repo): pushing a
   `vX.Y.Z` tag builds the wheel and republishes this index via GitHub Actions.
   You don't release from here.
