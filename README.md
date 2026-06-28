@@ -6,9 +6,11 @@ index; it is **not** the source. Don't hand-edit `simple/` — CI regenerates it
 every release.
 
 This README is the **user guide**: what `jira-helper` is, how to install, use,
-update, and uninstall it. The full, always-current command reference is the tool
-itself — `jira-helper --help`, `jira-helper <noun> --help`, and
-`jira-helper --json spec` (the entire command tree as JSON).
+update, and uninstall it. For a browsable per-command reference, see
+[`docs/command-reference.md`](./docs/command-reference.md) — auto-generated from the
+tool on every release. The always-current source of truth is the tool itself —
+`jira-helper --help`, `jira-helper <noun> --help`, and `jira-helper --json spec`
+(the entire command tree as JSON).
 
 ---
 
@@ -108,7 +110,7 @@ group.
 
 ```
 jira-helper init | doctor | version          # onboarding, health, version
-jira-helper spec [--json]                     # full command tree (LLM/MCP ingest)
+jira-helper spec [--json|--markdown]          # full command tree: JSON (LLM/MCP) or Markdown reference
 jira-helper config  init|show|get|set|edit|verify|path
 jira-helper account list|get|add|remove|search|path     # name ↔ account-id
 jira-helper issue   list|roots|tree|get                 # ticket queries
