@@ -1,6 +1,6 @@
 # jira-helper command reference
 
-Version 0.31.0 · generated from `jira-helper spec` — do not hand-edit (regenerated on each release).
+Version 0.32.0 · generated from `jira-helper spec` — do not hand-edit (regenerated on each release).
 
 Full machine-readable form: `jira-helper --json spec`. Live per-command help: `jira-helper <command> --help`.
 
@@ -495,7 +495,7 @@ jira-helper issue get PROJA-123
 
 List issues by assignee/org/date/status/JQL, sorted. Feature: F004/F005/F007/F008/F045/F046.
 
-'--org' expands a unit's subtree (whole 실 or one 팀) to its members (F007). '--roots' collapses the result to its effective root issues (F006). '--created-from/--to' filters on the creation date; '--updated-from/--to' (F044) on last-modified — and since Jira stamps 'updated' on create, '--updated-from -1w' covers 'created or modified in the last week' in one filter. Both accept an absolute date (2026-06-18) or a bare relative expression (-1w, startOfWeek()). Every '--*-to' bound is inclusive of the whole end day, to the minute, in the querying account's timezone (a bare end date becomes '<date> 23:59'). '--status-changed-from/--to' (#79) filters by the last *status* transition — distinct from --updated-* (which advances on ANY edit, so link/comment housekeeping resurfaces a long-closed issue). It is CACHE-ONLY (run 'sync run' first; --no-cache/--jql/empty cache raise): the flat list also AND-combines --created/--updated-* against the cache, and --assignee/--org is optional (omitted = the whole synced product). Bounds take -4w/-30d or YYYY-MM-DD (day-granular, whole-day inclusive end). '--assigned-from/--assigned-to' (F008) filters by assignee *history* — issues the person held at some point in the window (assignee WAS IN ... DURING/AFTER/BEFORE); requires --assignee or --org, is mutually exclusive with --jql, and is live-only. Status filters (F045) refine an existing filter (they can't stand alone): '--open' = open issues only (statusCategory != Done); '--status-category' selects whole buckets (To Do / In Progress / Done; aliases todo/in-progress/done); '--status' keeps only the named status(es); '--exclude-status' drops them — '--exclude-status Cancelled' drops cancelled while KEEPING completed work (a category filter can't, since Cancelled sits in the Done bucket). '--open' and '--status-category' are the same axis (use one); any status filter is mutually exclusive with --jql and forces the live path. Project filters (F047) keep/drop by project, applied to the OUTPUT (the query stays full): '--project' keeps only the named project key(s) and '--exclude-project' drops them. For a plain list this is each ticket's own project; with '--roots' it is each result's effective ROOT — a (rule-derived) root in an excluded project is dropped even if the assigned ticket that climbed to it isn't. Both accept multiple keys, are refinements (can't stand alone), and are mutually exclusive with --jql. '--sort' (F046) orders by created / updated / key / status-changed with '--asc'/'--desc' (default created desc; key sorts naturally, PROJA-2 before PROJA-10; status-changed is cache-only, #79); it orders the flat list, the --roots set, and the --roots --verbose siblings alike, and is exclusive with --jql. The default (non-JSON) view is one line per ticket (KEY — summary [status]); '--roots' collapses it to the distinct root epics, and '--roots --verbose' shows the path from each root epic down to the assigned tickets as a tree — only the relevant chain, not the root's whole subtree; assigned leaves are marked '← name'. '--json' returns the underlying structure (flat list, or the nested forest).
+'--org' expands a unit's subtree (whole 실 or one 팀) to its members (F007). '--roots' collapses the result to its effective root issues (F006). '--created-from/--to' filters on the creation date; '--updated-from/--to' (F044) on last-modified — and since Jira stamps 'updated' on create, '--updated-from -1w' covers 'created or modified in the last week' in one filter. Both accept an absolute date (2026-06-18) or a bare relative expression (-1w, startOfWeek()). Every '--*-to' bound is inclusive of the whole end day, to the minute, in the querying account's timezone (a bare end date becomes '<date> 23:59'). '--status-category-changed-from/--to' (#79) filters by the last *status* transition — distinct from --updated-* (which advances on ANY edit, so link/comment housekeeping resurfaces a long-closed issue). It is CACHE-ONLY (run 'sync run' first; --no-cache/--jql/empty cache raise): the flat list also AND-combines --created/--updated-* against the cache, and --assignee/--org is optional (omitted = the whole synced product). Bounds take -4w/-30d or YYYY-MM-DD (day-granular, whole-day inclusive end). '--assigned-from/--assigned-to' (F008) filters by assignee *history* — issues the person held at some point in the window (assignee WAS IN ... DURING/AFTER/BEFORE); requires --assignee or --org, is mutually exclusive with --jql, and is live-only. Status filters (F045) refine an existing filter (they can't stand alone): '--open' = open issues only (statusCategory != Done); '--status-category' selects whole buckets (To Do / In Progress / Done; aliases todo/in-progress/done); '--status' keeps only the named status(es); '--exclude-status' drops them — '--exclude-status Cancelled' drops cancelled while KEEPING completed work (a category filter can't, since Cancelled sits in the Done bucket). '--open' and '--status-category' are the same axis (use one); any status filter is mutually exclusive with --jql and forces the live path. Project filters (F047) keep/drop by project, applied to the OUTPUT (the query stays full): '--project' keeps only the named project key(s) and '--exclude-project' drops them. For a plain list this is each ticket's own project; with '--roots' it is each result's effective ROOT — a (rule-derived) root in an excluded project is dropped even if the assigned ticket that climbed to it isn't. Both accept multiple keys, are refinements (can't stand alone), and are mutually exclusive with --jql. '--sort' (F046) orders by created / updated / key / status-category-changed with '--asc'/'--desc' (default created desc; key sorts naturally, PROJA-2 before PROJA-10; status-category-changed is cache-only, #79); it orders the flat list, the --roots set, and the --roots --verbose / tree siblings alike, and is exclusive with --jql. The default (non-JSON) view is one line per ticket (KEY — summary [status]); '--roots' collapses it to the distinct root epics, and '--roots --verbose' shows the path from each root epic down to the assigned tickets as a tree — only the relevant chain, not the root's whole subtree; assigned leaves are marked '← name'. '--json' returns the underlying structure (flat list, or the nested forest).
 
 | name | type | required | repeatable | default | description |
 | --- | --- | --- | --- | --- | --- |
@@ -506,8 +506,8 @@ List issues by assignee/org/date/status/JQL, sorted. Feature: F004/F005/F007/F00
 | `--created-to` | text | no | no |  | Created on/before (inclusive; YYYY-MM-DD). |
 | `--updated-from` | text | no | no |  | Updated on/after (YYYY-MM-DD or relative, e.g. -1w). |
 | `--updated-to` | text | no | no |  | Updated on/before (inclusive; YYYY-MM-DD or relative). |
-| `--status-changed-from` | text | no | no |  | Status last changed on/after (YYYY-MM-DD or relative, e.g. -4w; cache-only). |
-| `--status-changed-to` | text | no | no |  | Status last changed on/before (inclusive; YYYY-MM-DD or relative; cache-only). |
+| `--status-category-changed-from` | text | no | no |  | Status last changed on/after (YYYY-MM-DD or relative, e.g. -4w; cache-only). |
+| `--status-category-changed-to` | text | no | no |  | Status last changed on/before (inclusive; YYYY-MM-DD or relative; cache-only). |
 | `--assigned-from` | text | no | no |  | Was assigned on/after (history; needs --assignee/--org). |
 | `--assigned-to` | text | no | no |  | Was assigned on/before (inclusive; needs --assignee/--org). |
 | `--status-category` | text | no | yes |  | Status category: To Do / In Progress / Done (aliases: todo, in-progress, done). |
@@ -516,7 +516,7 @@ List issues by assignee/org/date/status/JQL, sorted. Feature: F004/F005/F007/F00
 | `--open` | boolean | no | no |  | Open issues only (statusCategory != Done). |
 | `--project` | text | no | yes |  | Keep only these project key(s), e.g. PROJA. |
 | `--exclude-project` | text | no | yes |  | Drop these project key(s). |
-| `--sort` | text | no | no |  | Sort field: created, updated, key, or status-changed (default created; status-changed is cache-only). |
+| `--sort` | text | no | no |  | Sort field: created, updated, key, or status-category-changed (default created; status-category-changed is cache-only). |
 | `--asc` | boolean | no | no |  | Sort ascending (overrides per-field default). |
 | `--desc` | boolean | no | no |  | Sort descending (overrides per-field default). |
 | `--roots` | boolean | no | no |  | Collapse the result to its root issues (F006). |
@@ -527,7 +527,7 @@ List issues by assignee/org/date/status/JQL, sorted. Feature: F004/F005/F007/F00
 ```bash
 jira-helper issue list --assignee 홍길동 --open --sort updated
 jira-helper issue list --org 플랫폼개발실 --exclude-status 취소
-jira-helper issue list --status-changed-from -4w --sort status-changed
+jira-helper issue list --status-category-changed-from -4w --sort status-category-changed
 jira-helper issue list --org 플랫폼개발실 --sort key --asc
 ```
 
@@ -542,7 +542,7 @@ PROJA-15 — Add SSO [To Do]
 
 Root issues of an assignee/org set (walk effective parents). Feature: F006/F046.
 
-Sugar for 'issue list --roots' — takes the same refinement filters as 'issue list' (status/date/project/status-changed/--jql), forwarded unchanged. Reads the local cache (recursive CTE over effective_parent) when populated, else walks the live API. The default view lists each root epic on one line; add '--verbose' to show the paths down to the assigned tickets as a tree (assigned leaves marked '← name'). '--sort' (F046) orders by created / updated / key / status-changed with '--asc'/'--desc' (default created desc). '--json' returns the underlying structure. With '--roots', both the project filter and the cache-only '--status-changed-from/--to' (#79) key on each result's effective root (--status-changed needs --assignee/--org here, and can't combine with --created/--updated-*).
+Sugar for 'issue list --roots' — takes the same refinement filters as 'issue list' (status/date/project/status-category-changed/--jql), forwarded unchanged. Reads the local cache (recursive CTE over effective_parent) when populated, else walks the live API. The default view lists each root epic on one line; add '--verbose' to show the paths down to the assigned tickets as a tree (assigned leaves marked '← name'). '--sort' (F046) orders by created / updated / key / status-category-changed with '--asc'/'--desc' (default created desc). '--json' returns the underlying structure. With '--roots', both the project filter and the cache-only '--status-category-changed-from/--to' (#79) key on each result's effective root (it needs --assignee/--org here, and can't combine with --created/--updated-*).
 
 | name | type | required | repeatable | default | description |
 | --- | --- | --- | --- | --- | --- |
@@ -553,8 +553,8 @@ Sugar for 'issue list --roots' — takes the same refinement filters as 'issue l
 | `--created-to` | text | no | no |  | Created on/before (inclusive; YYYY-MM-DD). |
 | `--updated-from` | text | no | no |  | Updated on/after (YYYY-MM-DD or relative, e.g. -1w). |
 | `--updated-to` | text | no | no |  | Updated on/before (inclusive; YYYY-MM-DD or relative). |
-| `--status-changed-from` | text | no | no |  | Status last changed on/after (YYYY-MM-DD or relative, e.g. -4w; cache-only). |
-| `--status-changed-to` | text | no | no |  | Status last changed on/before (inclusive; YYYY-MM-DD or relative; cache-only). |
+| `--status-category-changed-from` | text | no | no |  | Status last changed on/after (YYYY-MM-DD or relative, e.g. -4w; cache-only). |
+| `--status-category-changed-to` | text | no | no |  | Status last changed on/before (inclusive; YYYY-MM-DD or relative; cache-only). |
 | `--assigned-from` | text | no | no |  | Was assigned on/after (history; needs --assignee/--org). |
 | `--assigned-to` | text | no | no |  | Was assigned on/before (inclusive; needs --assignee/--org). |
 | `--status-category` | text | no | yes |  | Status category: To Do / In Progress / Done (aliases: todo, in-progress, done). |
@@ -564,7 +564,7 @@ Sugar for 'issue list --roots' — takes the same refinement filters as 'issue l
 | `--project` | text | no | yes |  | Keep only these project key(s), e.g. PROJA. |
 | `--exclude-project` | text | no | yes |  | Drop these project key(s). |
 | `--verbose` | boolean | no | no |  | Show the path down to each assigned ticket as a tree. |
-| `--sort` | text | no | no |  | Sort field: created, updated, key, or status-changed (default created; status-changed is cache-only). |
+| `--sort` | text | no | no |  | Sort field: created, updated, key, or status-category-changed (default created; status-category-changed is cache-only). |
 | `--asc` | boolean | no | no |  | Sort ascending (overrides per-field default). |
 | `--desc` | boolean | no | no |  | Sort descending (overrides per-field default). |
 
@@ -586,12 +586,12 @@ PROJA-50 — Epic: Auth revamp [In Progress]
 
 Parent→child hierarchy for KEY (native + virtual rules). Feature: F006/F046.
 
-Climbs to KEY's effective root, then expands the subtree; each node is annotated with the rule that set its effective parent. Cache-backed when populated, else a live walk. The default view is an indented tree; '--json' emits the nested dict. '--sort' (F046) orders siblings within each level by created / updated / key / status-changed with '--asc'/'--desc' (default created desc; --sort status-changed is cache-only, #79 — raises on --no-cache/unsynced KEY).
+Climbs to KEY's effective root, then expands the subtree; each node is annotated with the rule that set its effective parent. Cache-backed when populated, else a live walk. The default view is an indented tree; '--json' emits the nested dict. '--sort' (F046) orders siblings within each level by created / updated / key / status-category-changed with '--asc'/'--desc' (default created desc; --sort status-category-changed is cache-only, #79 — raises on --no-cache/unsynced KEY).
 
 | name | type | required | repeatable | default | description |
 | --- | --- | --- | --- | --- | --- |
 | `key` | text | yes | no |  | Issue key, e.g. PROJA-123. |
-| `--sort` | text | no | no |  | Sort field: created, updated, key, or status-changed (default created; status-changed is cache-only). |
+| `--sort` | text | no | no |  | Sort field: created, updated, key, or status-category-changed (default created; status-category-changed is cache-only). |
 | `--asc` | boolean | no | no |  | Sort ascending (overrides per-field default). |
 | `--desc` | boolean | no | no |  | Sort descending (overrides per-field default). |
 
