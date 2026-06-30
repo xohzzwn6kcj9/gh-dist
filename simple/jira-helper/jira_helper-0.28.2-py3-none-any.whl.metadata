@@ -1,0 +1,381 @@
+Metadata-Version: 2.4
+Name: jira-helper
+Version: 0.28.2
+Summary: Terminal CLI and importable library for admin work over Atlassian Cloud (Jira now, Confluence later).
+License-Expression: MIT
+Keywords: jira,atlassian,confluence,cli
+Classifier: Private :: Do Not Upload
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: typer>=0.26.8
+Requires-Dist: httpx>=0.28.1
+Requires-Dist: PyYAML>=6.0.3
+Provides-Extra: dev
+Requires-Dist: pytest>=9.1.1; extra == "dev"
+Requires-Dist: ruff>=0.15.20; extra == "dev"
+
+# jira-helper
+
+A terminal **CLI** and importable **Python library** for admin work over
+**Atlassian Cloud** (Jira, plus Confluence page search): resolve people ↔ Atlassian
+account-ids, model a hierarchical org tree, and query/cache tickets (including
+by org unit) for fast browsing, statistics, and reports.
+
+> **Status: early release.** Live today — onboard with `init`, map people with
+> `account`, model your org tree with `org`, query tickets with `issue list`
+> (by assignee or org unit, created-date range, or raw JQL) / `issue get`, walk
+> the parent tree with `issue roots` / `issue tree` / `issue list --roots`, shape
+> virtual parent relationships with `rule`, and keep a local cache current with
+> `sync` (incremental, idempotent) — once populated, the parent-tree reads run off
+> the cache (one index scan instead of per-ancestor live calls) and inspect it
+> with `cache`. Every run is logged (credentials redacted) to a rotating file you
+> can read with `logs`. Search Confluence pages under a folder by title keyword with
+> `page list` / `page get` / `page search`. Still reporting *not implemented*:
+> Confluence beyond `page` (`space` and richer page filters come later). The full
+> command surface is wired and self-describing
+> (`--help`, `spec`); the shape is stable and the behavior fills in.
+
+## Design
+
+- **Library-first, 1:1 mapping.** Every command is a thin wrapper over a
+  function: `noun` = module, `verb` = function. `jira-helper issue roots …` →
+  `jira_helper.issue.roots(…)`. The CLI only parses args and renders; `--json`
+  is a renderer flag, never a behavior change.
+- **Resource-first nouns** modeled on `gh`/`kubectl`:
+  `jira-helper [GLOBAL FLAGS] <noun> <verb> [args] [flags]`.
+- **`--json` everywhere** for scripting, plus a machine-readable `spec` command
+  that emits the entire command tree (every command, arg, flag, type, default,
+  and a worked example + sample output) as JSON — built to be driven by an
+  LLM/MCP wrapper in a single call.
+
+## Command surface
+
+```
+jira-helper init | doctor | version          # onboarding, health, version
+jira-helper spec [--json|--markdown]          # full command tree: JSON (LLM/MCP) or Markdown reference
+
+jira-helper config  init|show|get|set|edit|verify|path
+jira-helper account list|get|add|remove|search|path     # name ↔ account-id
+jira-helper issue   list|roots|tree|get                 # ticket queries
+jira-helper org     list|show|tree|members|create|move|rename|add-member|remove-member|delete|validate|edit|path
+jira-helper rule    list|edit|add|remove|test|validate|path   # virtual-parent rules
+jira-helper cache   status|get|export|clear|path        # local SQLite cache
+jira-helper sync    run|status|install                  # background refresh
+jira-helper logs    path|status|show|clear               # CLI log file (errors, debugging)
+jira-helper page    list|get|search                      # Confluence pages by folder/title (F012)
+```
+
+Global flags are defined once and precede the noun, e.g.
+`jira-helper --json issue list --assignee alice`.
+
+**Color.** Issue views (`list`/`roots`/`tree`) are colorized — the key by issue
+type (Epic pink, Story green, Task blue, Bug red), `[status]` by status category
+(To Do grey, In Progress blue, Done green) — following Jira Cloud's palette. Color
+is on at a TTY and off when piped or under `--json`; force it with `--color`, or
+disable with `--no-color` or the standard `NO_COLOR` env var. Set a persistent
+default in config: `jira-helper config set color always` (or `never`/`auto`). On a
+truecolor terminal (e.g. iTerm2) the exact hues render; elsewhere it down-shifts to
+256- then 16-color automatically.
+
+Run `jira-helper --help` (or `<noun> --help`) for the full, documented grammar.
+
+## Quick start
+
+```bash
+# 1. onboard (writes ~/.config/jira-helper/config.yaml, chmod 600)
+jira-helper init
+
+# 2. confirm credentials + cache health
+jira-helper doctor
+
+# 3. map a person to their Atlassian account-id
+jira-helper account search "Alice Kim"           # live lookup → candidate ids
+jira-helper account add alice 5b10ac8d82e05b22cc  # record the mapping
+
+# 4. query tickets
+jira-helper issue list --assignee alice                 # one person
+jira-helper issue list --assignee alice --assignee bob  # several
+jira-helper issue list --created-from 2024-01-01 --created-to 2024-03-31  # --*-to is inclusive of the whole end day
+jira-helper issue list --assignee alice --updated-from -1w  # created or modified in the last week
+jira-helper issue list --status-changed-from -4w           # status actually moved in the last 4 weeks (cache-only)
+jira-helper issue list --assignee alice --assigned-from 2024-01-01 --assigned-to 2024-03-31  # was assigned in window
+jira-helper issue list --assignee alice --open                 # open only (statusCategory != Done)
+jira-helper issue list --assignee alice --exclude-status Cancelled  # drop cancelled, keep completed
+jira-helper issue list --org platform --status-category in-progress  # one status bucket
+jira-helper issue list --org platform --project PROJA --project PROJB  # only these projects
+jira-helper issue list --assignee alice --exclude-project PROJC  # drop a project
+jira-helper issue list --assignee alice --sort updated         # most-recently-updated first
+jira-helper issue list --org platform --sort key --asc         # by key, PROJA-2 before PROJA-10
+jira-helper issue list --jql 'project = PROJA AND statusCategory != Done'  # raw escape hatch
+jira-helper issue get PROJA-123
+jira-helper --json issue list --assignee alice          # machine-readable
+```
+
+`issue list` shows **only the assigned tickets**, one per line. Add `--roots` to climb
+each ticket to its **root epic** and list just the distinct roots. Add `--roots
+--verbose` to render the **paths** from each root epic down to the assigned tickets as a
+tree (only the relevant ancestor chain — not the root's whole subtree); assigned leaves
+are marked `← <name>`. `--json` returns the underlying structure (flat list, or the
+nested forest with `--roots --verbose`).
+
+**Status filters** refine any query (they don't stand alone — combine with
+`--assignee`/`--org`/a date range). `--open` keeps only open issues (`statusCategory !=
+Done`); `--status-category` selects whole buckets — `To Do` / `In Progress` / `Done`
+(aliases `todo` / `in-progress` / `done`); `--status` keeps only the named status(es),
+and `--exclude-status` drops them. Note the difference: "Cancelled" is normally a *status*
+inside the **Done** bucket, so `--exclude-status Cancelled` drops cancelled tickets while
+**keeping** completed work — a category filter can't (it would drop all of Done).
+`--open` and `--status-category` are the same axis (use one), and any status filter is
+mutually exclusive with `--jql`.
+
+**Status-changed** — `--status-changed-from/--to` filters on the last *status* transition,
+not `updated`. Jira's `updated` advances on **any** edit (a comment, a link, a Confluence
+page attachment), so a long-closed issue resurfaces in `--updated-from` on pure housekeeping;
+`--status-changed-from -4w` returns only issues whose **status** actually moved in the window.
+This field lives only in the local cache, so the query is **cache-only**: run `sync run`
+first (`--no-cache` / `--jql` / an empty cache raise). In this mode `--assignee`/`--org` is
+optional (omitted = the whole synced product) and the flat list also AND-combines
+`--created/--updated-*` against the cache. Bounds take `-4w` / `-30d` or `YYYY-MM-DD`
+(day-granular, whole-day inclusive end).
+
+**Project filters** keep/drop by project, applied to the **output** (the query stays full),
+and refine an existing filter (they don't stand alone — combine with `--assignee`/`--org`/a
+date range): `--project` keeps only the named project key(s) and `--exclude-project` drops
+them. For a plain list this is each ticket's own project; with `--roots` it is each result's
+**effective root** — a virtual (rule-derived) root in an excluded project is dropped even
+though the assigned ticket that climbed to it isn't. Both accept multiple keys (repeat the
+flag) and are mutually exclusive with `--jql`.
+
+**Sort** — `--sort {created|updated|key|status-changed}` with `--asc`/`--desc` orders the
+output (default `created` descending; `key` sorts naturally, so `PROJA-2` comes before
+`PROJA-10`; `status-changed` is cache-only, like the filter above). It applies uniformly to
+the flat list, the `--roots` set, and the siblings in `--roots --verbose` / `issue tree`.
+`--sort` is mutually exclusive with `--jql` (put `ORDER BY` in your raw query instead).
+
+`issue roots` is the verb form of `issue list --roots` and takes **all** the same flags —
+the status / date / project filters above as well as `--sort`/`--asc`/`--desc` and `--jql`
+— so `issue roots --org platform --open --project PROJA` works exactly like the modifier
+form. (`issue tree <KEY>` operates on a single key, so it takes only `--sort`.)
+
+## Org hierarchy (`org`)
+
+Model your org as a tree — `그룹 ▸ 부문 ▸ 실 ▸ 팀 ▸ 파트` (any depth; the `type`
+label is free-form, so levels may be skipped). A unit's members are people from
+the account store; querying a unit expands its **whole subtree** to those members'
+tickets — so the same command serves "the whole office" and "one team".
+
+```bash
+# build the tree (parent must exist first; or `org edit` to bulk-author org.yaml)
+jira-helper org create 플랫폼개발실 --type 실 --member 홍길동
+jira-helper org create 서비스개발팀 --type 팀 --parent 플랫폼개발실 --member alice --member bob
+jira-helper org create 인프라개발팀 --type 팀 --parent 플랫폼개발실
+jira-helper org create 데이터파트 --type 파트 --parent 인프라개발팀 --member carol
+
+jira-helper org tree                       # indented hierarchy
+jira-helper org members 플랫폼개발실    # who a query will hit (subtree union)
+jira-helper org validate                   # dangling parents / cycles / unresolved members
+
+# tickets for everyone under the office, or just one team — same flag
+jira-helper issue list --org 플랫폼개발실
+jira-helper issue list --org 서비스개발팀
+```
+
+## Parent tree & virtual rules (`rule`)
+
+Tickets form a tree via Jira's native parent links. `issue roots` collapses any
+result set to the **root tickets** its members live under, `issue tree <KEY>`
+shows the hierarchy around a ticket, and `--roots` is a modifier on any
+`issue list`. On top of the native tree you can layer **virtual parents** — a
+gitignored `rules.yaml` of conditional rules (first-match-wins) plus one-off
+manual edges — so your own conventions become part of the hierarchy.
+
+```bash
+# roots of everything an assignee (or a whole org unit) is working on
+jira-helper issue roots --assignee alice
+jira-helper issue roots --org 플랫폼개발실 --open --project PROJA  # roots takes list's filters (status/date/project/--jql)
+jira-helper issue list --org 플랫폼개발실 --roots   # same, as a modifier
+
+jira-helper issue tree PROJA-123        # hierarchy around one ticket
+
+# virtual parents: a one-off manual edge, or author conditional rules
+jira-helper rule add PROJA-101 PROJA-50 # PROJA-101's parent is PROJA-50
+jira-helper rule edit                   # author conditional rules (rules.yaml)
+jira-helper rule test PROJA-101         # which rule fires + the effective parent
+jira-helper rule validate               # schema / ambiguity / cycle checks
+```
+
+## Background sync & cache (`sync` / `cache`)
+
+`sync` fills a local SQLite cache so the parent-tree reads are instant. Point it at
+the org unit(s) you care about via the `sync_orgs` config key; a run then caches
+every ticket assigned to those units' members **plus the full ancestor chain of
+each** (so epics/parents owned by others are present too), keyed off Jira's
+`updated` field for cheap incremental re-runs.
+
+```bash
+jira-helper config set sync_orgs "플랫폼개발실"   # or a comma-list / a YAML list via `config edit`
+jira-helper sync run                  # incremental (idempotent); --full for a clean rebuild
+jira-helper sync status               # last run, watermark, lock state, last error
+jira-helper sync install --launchd    # emit a launchd plist (or --cron) to schedule it
+
+jira-helper cache status              # rows per product, last sync, size, schema version
+jira-helper cache get PROJA-123       # one cached record
+jira-helper --json cache export       # dump the cache for eyeballing / grep
+```
+
+Once the cache is populated, `issue roots` / `issue tree` / `rule test` read from it
+automatically (and conditional-rule virtual descendants become enumerable). Pass
+`--no-cache` to force a live walk, or a raw `--jql` (which the cache can't evaluate)
+to fall back transparently.
+
+## Logs & troubleshooting (`logs`)
+
+Every run is logged to a rotating file under the config dir — by default
+`~/.config/jira-helper/logs/jira-helper.log` — so a failure (including an
+unexpected one) always leaves a trail you can read back. **Credentials are
+redacted at write time**: the API token and the `Authorization` header never reach
+the file. Other details (the Jira site URL, your email, account-ids, JQL) are kept
+so the log is actually useful for debugging — review one before sharing it
+publicly.
+
+```bash
+jira-helper logs path                 # where the log file lives
+jira-helper logs status               # size, line count, time span, rotation backups
+jira-helper logs show --lines 50      # tail the log
+jira-helper logs show --level ERROR   # only errors (credentials already redacted)
+jira-helper -y logs clear             # truncate the log + drop rotation backups
+```
+
+`-v`/`--verbose` additionally streams the log to stderr for live debugging.
+Disable file logging entirely with `JIRA_HELPER_NO_LOG=1`, or relocate it with
+`JIRA_HELPER_LOG_DIR=/path` (or a `log_dir` config key). The same file is also the
+first thing to grab for a bug report — `tail`/`grep` it directly if the CLI itself
+is too broken to run.
+
+## Confluence pages (`page`)
+
+Find pages **in a space, under a folder, whose title contains a keyword** —
+returning each match's title and web URI:
+
+```bash
+# pages anywhere under folder 123456 (whole subtree) whose title contains "runbook"
+jira-helper page list --space DOCS --folder 123456 --title-contains runbook
+
+jira-helper page list --space DOCS --folder 123456 --direct   # direct children only
+jira-helper page get 123456                                   # one page by id
+jira-helper page search "space = DOCS AND title ~ 'runbook'"  # raw CQL escape hatch
+```
+
+`--folder` takes any Confluence **content id** — a *folder* content-type id or a
+*parent-page* id work the same (both match the whole subtree below it). Add
+`--direct` to limit to immediate children. `--title-contains` is a literal,
+case-insensitive substring filter. `page search` passes raw
+[CQL](https://developer.atlassian.com/cloud/confluence/cql-fields/) through
+unchanged (mirrors `issue list --jql`). These reads are live (the page cache is a
+later addition); credentials use the same Atlassian site + API token as Jira.
+
+## Use as a library
+
+```python
+import jira_helper
+
+jira_helper.account.add("alice", "5b10ac8d82e05b22cc")
+jira_helper.org.create("서비스개발팀", type="팀", members=["alice"])
+issues = jira_helper.issue.list(org=["플랫폼개발실"])   # whole-subtree expansion
+one = jira_helper.issue.get("PROJA-123")
+pages = jira_helper.page.list(space="DOCS", folder="123456", title_contains="runbook")
+```
+
+## Requirements
+
+- Python 3.11+
+- A Jira Cloud site (`https://your-domain.atlassian.net`)
+- A Jira API token — create one at
+  <https://id.atlassian.com/manage-profile/security/api-tokens>
+
+## Installation
+
+### Install / update (recommended)
+
+[`uv`](https://docs.astral.sh/uv/) installs the tool from a public distribution
+index over plain, anonymous HTTPS — no GitHub login or token required (handy on
+locked-down networks where authenticated access is blocked). First install `uv`:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Then install — and later upgrade — `jira-helper`:
+
+```bash
+# install
+uv tool install jira-helper --index https://xohzzwn6kcj9.github.io/gh-dist/simple/
+
+# upgrade to the latest release
+uv tool install --force jira-helper --index https://xohzzwn6kcj9.github.io/gh-dist/simple/
+```
+
+For one-word upgrades, add an alias to `~/.zshrc`:
+
+```bash
+alias jh-up='uv tool install --force jira-helper --index https://xohzzwn6kcj9.github.io/gh-dist/simple/'
+```
+
+`--index` keeps PyPI as the default, so runtime dependencies (typer, httpx,
+PyYAML) resolve from PyPI while `jira-helper` itself comes from the distribution
+index. This assumes PyPI is reachable over HTTPS.
+
+### From a clone (development)
+
+```bash
+pip install -e .
+```
+
+Either way you get the `jira-helper` console entry point.
+
+## Configuration
+
+Authentication uses Jira Cloud **basic auth** with your account email + an API
+token (the token is **not** your password). Two ways to provide it, in order of
+precedence:
+
+1. **Interactive** — `jira-helper init` writes `config.yaml` (chmod 600) under
+   `$JIRA_HELPER_CONFIG` → `~/.config/jira-helper/`. Inspect/edit it later with
+   `jira-helper config show` / `config set <key> <value>` / `config verify`.
+2. **Environment variables** — override (or replace) the file at read time:
+
+   | Variable         | Description                              |
+   | ---------------- | ---------------------------------------- |
+   | `JIRA_BASE_URL`  | e.g. `https://your-domain.atlassian.net` |
+   | `JIRA_EMAIL`     | The Atlassian account email              |
+   | `JIRA_API_TOKEN` | API token (NOT your password)            |
+
+Env vars win over the file, so CI or a throwaway shell can run without `init`.
+
+> Never commit credentials. The config file and `.env` are git-ignored, and the
+> token is masked by `config show`/`get` unless you pass `--reveal`.
+
+## Development
+
+```bash
+pip install -e '.[dev]'
+ruff check .
+ruff format .
+pytest
+```
+
+## Releasing (maintainer)
+
+The version is derived from git tags by `setuptools-scm`, so a tag push **is** the
+release: GitHub Actions builds the wheel and publishes it to the distribution
+index over GitHub Pages.
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+Each tag release also auto-publishes a generated, public-safe **command reference**
+(`jira-helper spec --markdown`) to `docs/command-reference.md` in the distribution
+repo — derived from the CLI's own docstrings, company-agnostic, and refreshed in
+lockstep with every wheel.
