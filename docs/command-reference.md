@@ -1,6 +1,6 @@
 # jira-helper command reference
 
-Version 0.34.0 · generated from `jira-helper spec` — do not hand-edit (regenerated on each release).
+Version 0.35.0 · generated from `jira-helper spec` — do not hand-edit (regenerated on each release).
 
 Full machine-readable form: `jira-helper --json spec`. Live per-command help: `jira-helper <command> --help`.
 
