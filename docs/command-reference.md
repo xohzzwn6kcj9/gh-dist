@@ -1,6 +1,6 @@
 # jira-helper command reference
 
-Version 0.36.0 · generated from `jira-helper spec` — do not hand-edit (regenerated on each release).
+Version 0.37.0 · generated from `jira-helper spec` — do not hand-edit (regenerated on each release).
 
 Full machine-readable form: `jira-helper --json spec`. Live per-command help: `jira-helper <command> --help`.
 
@@ -228,7 +228,7 @@ jira-helper account search "홍길동"
 
 Wipe cache (optionally per-product; use -y to skip confirmation). Feature: F010.
 
-Prompts before deleting unless the global ``-y/--yes`` is set; ``--product`` wipes only that product's rows + sync-state. Returns the issue rows removed.
+Prompts before deleting unless the global ``-y/--yes`` is set; ``--product`` wipes only that product's rows + sync-state. Returns the issue rows removed. A full wipe (no ``--product``) also flushes the API response memoize (``http_cache.db``), so it is the way to force-refresh cached live reads.
 
 | name | type | required | repeatable | default | description |
 | --- | --- | --- | --- | --- | --- |
@@ -314,6 +314,8 @@ jira-helper cache path
 
 Rows (per product), last sync, on-disk size, schema version. Feature: F010.
 
+The ``http_cache`` block reports the separate API response memoize (``http_cache.db``): its path, row count, and on-disk size.
+
 **Example**
 
 ```bash
@@ -326,7 +328,9 @@ jira-helper cache status
 {"path": "~/.config/jira-helper/cache.db", "schema_version": 2, "rows": 128,
  "per_product": {"jira": 128},
  "meta": {"jira": {"last_sync_at": "2026-06-21T09:00:00Z", "watermark": "..."}},
- "size_bytes": 90112}
+ "size_bytes": 90112,
+ "http_cache": {"path": "~/.config/jira-helper/http_cache.db", "exists": true,
+                "rows": 12, "size_bytes": 24576}}
 ```
 
 ## `config` — Onboarding + configuration CRUD (F001).
